@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Threading;
 using System.Windows.Forms;
 
 namespace BingWallpaper {
@@ -10,21 +9,12 @@ namespace BingWallpaper {
         /// </summary>
         [STAThread]
         static void Main() {
-            using (Mutex mutex = new Mutex(false, "Global\\" + "71981632-A427-497F-AB91-241CD227ECFF")) {
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
 
-                if (!mutex.WaitOne(0, false)) {
-                    Process[] oldProcesses = Process.GetProcessesByName("BingWallpaper");
-                    if (oldProcesses.Length > 0) {
-                        Process oldProcess = oldProcesses[0];
-                    }
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new BingWallpaper());
 
-                    return;
-                }
-
-                Application.Run(new BingWallpaper());
-            }
+            AutoStart.Run("BingWallpaper", AppDomain.CurrentDomain.BaseDirectory + "//BingWallpaper.exe");
         }
     }
 }
