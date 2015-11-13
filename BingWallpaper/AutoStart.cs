@@ -6,7 +6,7 @@ namespace BingWallpaper {
     public class AutoStart {
 
         public static void Run(string appName, string appPath) {
-            RegistryKey runKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+            RegistryKey runKey = Registry.LocalMachine.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
             if (Check(runKey, appName))
                 runKey.DeleteValue(appName);
 

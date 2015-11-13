@@ -27,21 +27,30 @@ namespace BingWallpaper {
             this.WindowState = FormWindowState.Minimized;
             this.ShowInTaskbar = false;
 
-            Dictionary<string, string> arguments = new Dictionary<string, string>();
-            string argStr = "";
-            if (null != args && args.Length > 0) {
-                arguments = CMDArgs.Parse(args, out argStr);
-                if (arguments.ContainsKey("?") || arguments.ContainsKey("help")) {
-                    Menu();
+            try {
+                Dictionary<string, string> arguments = new Dictionary<string, string>();
+                string argStr = "";
+                if (null != args && args.Length > 0) {
+                    arguments = CMDArgs.Parse(args, out argStr);
+                    if (arguments.ContainsKey("?") || arguments.ContainsKey("help")) {
+                        Menu();
 
-                    return;
+                        return;
+                    }
+                    else if (arguments.ContainsKey("a")) {
+                        AutoRun(argStr);
+                    }
                 }
-                else if (arguments.ContainsKey("a")) {
-                    AutoRun(argStr);
-                }
+
+                Run(arguments);
+
+            }
+            catch (Exception ex) {
+                Console.WriteLine(ex.Message);
+                EventLog.WriteEntry("BW", ex.Message, EventLogEntryType.Error);
             }
 
-            Run(arguments);
+            EventLog.WriteEntry("BW", "Start", EventLogEntryType.Information);
         }
 
         static void Menu() {
