@@ -18,7 +18,7 @@ namespace BingWallpaper {
         private static Queue<string> Slides = null;
         private static System.Threading.Timer DownloadTimer;
         private static System.Threading.Timer SlideTimer;
-        private static DateTime LastDownload = DateTime.MaxValue;
+        private static DateTime LastDownload = DateTime.MinValue;
 
         /*http://cn.bing.com/az/hprichbg/rb/Cyclops_ZH-CN12843334634_1920x1080.jpg*/
 
