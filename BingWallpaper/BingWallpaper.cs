@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -19,6 +20,9 @@ namespace BingWallpaper {
         private static System.Threading.Timer DownloadTimer;
         private static System.Threading.Timer SlideTimer;
         private static DateTime LastDownload = DateTime.MinValue;
+        private static List<KeyValuePair<int, int>> Resolution = null;
+        private static int Width = -1;
+        private static int Height = -1;
 
         /*http://cn.bing.com/az/hprichbg/rb/Cyclops_ZH-CN12843334634_1920x1080.jpg*/
 
@@ -27,13 +31,35 @@ namespace BingWallpaper {
             this.WindowState = FormWindowState.Minimized;
             this.ShowInTaskbar = false;
 
+            Resolution = new List<KeyValuePair<int, int>>() {
+                new KeyValuePair<int, int>(1920, 1080),
+                new KeyValuePair<int, int>(1680, 1050),
+                new KeyValuePair<int, int>(1600, 900),
+                new KeyValuePair<int, int>(1440, 900),
+                new KeyValuePair<int, int>(1440, 1050),
+                new KeyValuePair<int, int>(1366, 768),
+                new KeyValuePair<int, int>(1360, 1050),
+                new KeyValuePair<int, int>(1280, 1024),
+                new KeyValuePair<int, int>(1280, 960),
+                new KeyValuePair<int, int>(1280, 800),
+                new KeyValuePair<int, int>(1280, 768),
+                new KeyValuePair<int, int>(1280, 720),
+                new KeyValuePair<int, int>(1280, 600),
+                new KeyValuePair<int, int>(1152, 864),
+                new KeyValuePair<int, int>(1024, 768),
+                new KeyValuePair<int, int>(800, 600)
+            };
+
+            Width = Screen.PrimaryScreen.Bounds.Width;
+            Height = Screen.PrimaryScreen.Bounds.Height;
+
             try {
                 Dictionary<string, string> arguments = new Dictionary<string, string>();
                 string argStr = "";
                 if (null != args && args.Length > 0) {
                     arguments = CMDArgs.Parse(args, out argStr);
                     if (arguments.ContainsKey("?") || arguments.ContainsKey("help")) {
-                        Menu();
+                        HelpMenu();
 
                         return;
                     }
@@ -53,7 +79,7 @@ namespace BingWallpaper {
             EventLog.WriteEntry("BW", "Start", EventLogEntryType.Information);
         }
 
-        static void Menu() {
+        static void HelpMenu() {
             StringBuilder sb = new StringBuilder();
 
             sb.AppendLine("--------------------------------");
@@ -74,13 +100,14 @@ namespace BingWallpaper {
             int range = arguments.ContainsKey("r") ? Int32.Parse(arguments["r"]) : 5;
             Slides = new Queue<string>(range);
 
-            DownloadWallpaper(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height, range);
+            DownloadWallpaper(range);
 
             /* 更换壁纸 */
             SlideTimer = new System.Threading.Timer((state) => {
                 try {
                     string imgSrc = Next(range);
-                    Win32Api.SystemParametersInfo(20, 0, imgSrc, 0x2);
+                    if (!string.IsNullOrEmpty(imgSrc))
+                        Win32Api.SystemParametersInfo(20, 0, imgSrc, 0x2);
                 }
                 catch (Exception ex) {
                     EventLog.WriteEntry("BW", ex.Message, EventLogEntryType.Error);
@@ -93,12 +120,14 @@ namespace BingWallpaper {
             DownloadTimer = new System.Threading.Timer((state) => {
                 if (DateTime.Now.Date > LastDownload.Date) {
                     try {
-                        bool flag = DownloadWallpaper(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height, range);
+                        bool flag = DownloadWallpaper(range);
                         if (flag) {
                             Console.WriteLine("Success download latest wallpaper.");
 
                             string imgSrc = Next(range);
-                            Win32Api.SystemParametersInfo(20, 0, imgSrc, 0x2);
+                            if (!string.IsNullOrEmpty(imgSrc))
+                                Win32Api.SystemParametersInfo(20, 0, imgSrc, 0x2);
+
                             LastDownload = DateTime.Now;
                         }
                     }
@@ -111,14 +140,34 @@ namespace BingWallpaper {
         }
 
         private string Next(int range) {
-            string imgStr = Slides.Dequeue();
-            Slides.Enqueue(imgStr);
+            if (null != Slides && Slides.Count > 0) {
+                string imgStr = Slides.Dequeue();
+                Slides.Enqueue(imgStr);
+                return imgStr;
+            }
+            else {
+                if (!Directory.Exists(ImgDir)) {
+                    Directory.CreateDirectory(ImgDir);
 
-            return imgStr;
+                    return "";
+                }
+                else {
+                    var images = Directory.GetFiles(ImgDir, "*.jpg");
+                    if (null != images && images.Length > 0) {
+                        var unsortImages = images.ToList();
+                        var selImages = unsortImages.OrderByDescending(I => I).Take(range).ToList();
+
+                        selImages.ForEach(I => Slides.Enqueue(I));
+
+                        return selImages.FirstOrDefault();
+                    }
+                }
+            }
+
+            return "";
         }
 
-
-        private bool DownloadWallpaper(int width, int height, int range) {
+        private bool DownloadWallpaper(int range) {
             try {
                 Slides.Clear();
 
@@ -130,16 +179,24 @@ namespace BingWallpaper {
                 foreach (Match matches in allMatches) {
                     if (matches.Success && matches.Groups.Count >= 4) {
                         var url = string.Format("http://cn.bing.com/{0}", matches.Groups[2].Value);
-                        url = url.Replace(matches.Groups[3].Value, width.ToString());
-                        url = url.Replace(matches.Groups[4].Value, height.ToString());
+                        url = url.Replace(matches.Groups[3].Value, Width.ToString());
+                        url = url.Replace(matches.Groups[4].Value, Height.ToString());
 
                         if (!Directory.Exists(ImgDir))
                             Directory.CreateDirectory(ImgDir);
 
                         string imgSrc = ImgDir + "\\" + matches.Groups[1].Value + ".jpg";
                         if (!File.Exists(imgSrc)) {
-                            using (WebClient client = new WebClient()) {
-                                client.DownloadFile(url, imgSrc);
+                            try {
+                                using (WebClient client = new WebClient()) {
+                                    client.DownloadFile(url, imgSrc);
+                                }
+                            }
+                            catch (WebException ex) {
+                                if (((HttpWebResponse)ex.Response).StatusCode == HttpStatusCode.NotFound) {
+                                    Width = Resolution.FirstOrDefault().Key;
+                                    Height = Resolution.FirstOrDefault().Value;
+                                }
                             }
                         }
                         Slides.Enqueue(imgSrc);
